@@ -1,1 +1,21 @@
+elf1:
+I exectued command readelf -l elf1 and I went down in segment sections and I obtained a flag.
+B A S C { s 3 c T i 0 N 5 }
 
+elf2:
+When I executed command file elf2 in terminal, I observed that this file is run by ARM machine, so
+linux kernel cannot execute it, then I used command qemu-arm ./elf2, and I obtained a flag: BASC{ARMed_&_d4ng3r0uS}
+
+elf3:
+When I execute a command file elf3, terminal shows me this message: elf3: data. So, by inspecting this file, I realized that first 4 bytes are not default one for an ElF file. So, I changed them, using bless editor. 
+I prefer bless instead of hte :)
+On a elf3 file starting 4 bytes are: 7F 65 6C 66
+On a normal (default) ELF file starting 4 bytes are: 7F 45 4C 46
+So, I changed them to a proper one. And I just executed ./elf3 and I obtained a flag:
+BASC{cAs3_maTT3rS}
+
+elf4:
+elf4 differs from a normal elf file in the way that elf4 header(LOAD one) doesn't have (E) permission, which stands for exectuion. So I added execution permission to this header. 
+I realized this be comparing those headers with the header of elf1 file.
+After I added execution permission to the second LOAD header, I executed a file and I obtained a
+flag: BASC{no_eXec_no_party}
