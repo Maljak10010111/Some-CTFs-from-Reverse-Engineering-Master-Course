@@ -1,0 +1,118 @@
+toppler32:
+
+Firstly I have imported toppler32 in ghidra. Then the first function that is shown is main.
+From main by intuition I went to the funtion startgame().
+I was looking into all the functions of the startgame() function. The most logic one to follow and from my point of view the right one was men_main().
+Inside the men_main function there is this piece of decomplied code:
+  if (p_Var1 != (_menusystem *)0x0) {
+    p_Var1 = set_menu_system_timeproc(p_Var1,200,men_main_timer_proc);
+    p_Var1 = add_menu_option(p_Var1,(char *)0x0,men_main_startgame_proc,SDLK_s,MOF_PASSKEYS,0);
+    p_Var1 = add_menu_option(p_Var1,(char *)0x0,(menuopt_callback_proc)0x0,SDLK_FIRST,MOF_NONE,0);
+    p_Var1 = add_menu_option(p_Var1,(char *)0x0,men_main_highscore_proc,SDLK_h,MOF_NONE,0);
+    p_Var1 = add_menu_option(p_Var1,(char *)0x0,men_options,SDLK_o,MOF_NONE,0);
+    p_Var1 = add_menu_option(p_Var1,(char *)0x0,men_main_leveleditor_proc,SDLK_e,MOF_NONE,0);
+    p_Var1 = add_menu_option(p_Var1,(char *)0x0,(menuopt_callback_proc)0x0,SDLK_FIRST,MOF_NONE,0);
+    p_Var1 = add_menu_option(p_Var1,"Quit",(menuopt_callback_proc)0x0,SDLK_q,MOF_NONE,0);
+    p_Var1->wraparound = true;
+    p_Var1 = run_menu_system(p_Var1,(_menusystem *)0x0);
+    free_menu_system(p_Var1);
+  }
+  
+At this line p_Var1 = add_menu_option(p_Var1,(char *)0x0,men_main_startgame_proc,SDLK_s,MOF_PASSKEYS,0);  I saw the function called men_main_startgame_proc and I went to check it.
+Inside this function I checked all the functions and the most interested for me was main_game_loop() and I went inside it.
+This function represents the flow of the game. Inside it I was observing all the functions and I saw gam_towergame().
+I went inside it, this function is the one from which other relevant functions of this game are called (relevant also for hackers to manipulate them).
+*** After I went to this function I observed another path to find this function: gam_towergame() is called from the function le_edit(). le_edit() is called from the function 
+men_main_leveleditor_proc(). The function men_main_leveleditor_proc() is used in the function men_main(). The func men_main() is called from startgame(). 
+startgame() is inside main(). So the path is similar.
+ 
+By inspecting the function gam_towergame() I have found two interesting functions for hacking named: pts_died and akt_time, respectively. 
+Function pts_died is called in two cases when I have STATE_TIMEOUT and STATE_DIED.
+I went to inspect it and I discovered that this function decreases lifes inside the game.
+At the very end of the decompiled code of the function gam_towergame, the function akt_time is called. I realized that this function decreases the time of the game.
+
+
+akt_time
+there is this piece of the decompiled code:
+uVar2 = *time -1;
+*time = uVar2;
+which basically represents decreasing of the time (like time=time-1).
+The corresponding machine code looks like this:
+        0804c4ef 8b 03           MOV        time,dword ptr [EBX]
+        0804c4f1 83 e8 00        SUB        time,0x1
+        0804c4f4 89 03           MOV        dword ptr [EBX],time1
+        
+So I patched corresponding machine code (I patched SUB instruction that it doesn't do -1 anymore). 
+I patched the instruction by going into the window Listing and then instead of 0x1, I put 0x0 and then I achieved no reduction. => right click -> patch instruction. 
+Basically I changed byte 1 to byte 0.
+The result is stored in the register EAX. EAX is the register where the results of the functions are saved.
+*After applying this, there is no reduction of the time in the game! I achieved an infinite time.
+
+pts_died
+there is the piece of the decompiled code lifes=lifes-1;
+I patched the corresponding instruction in this way:
+I changed the bytes from 0x1 to 0x0, now there is no reduction of the lives too.
+Like in the case of previous function.
+
+     
+toppler64:
+
+1. By going to the given address 0x42b8f0, I was inspecting every single function and I went to the function FUN_00413ffb and I realized that this one is the function which decreases lives.
+So as in the case of toppler32 I changed 0x1 byte into the 0x0 on the address:
+        00414005 83 e8 00        SUB        EAX,0x0
+        
+2. By going to the given address of akt_time I observed this piece of decompiled code:
+ *param_1 = *param_1 - 1; this code is decreasing the time by 1(1 second).
+The corresponding machine code instruction is: 
+ LEA        param_3,[RAX + -0x1]
+
+By following the logic from previous example of toppler32 I observed that I could use SUB instruction instead of LEA.
+I wrote: SUB EAX,0x0 instead of LEA param_3,[RAX + -0x1]. Because if I wrote SUB EAX,0x1 I would subtract 1 from the value in EAX.
+But I wrote SUB EAX,0x0 and it does nothing in terms of modifying the value inside EAX (subtracting zero does nothing).
+By this change I have achieved an infinite time, but the only thing is that the time is not fixed to 500sec like in original case, but it is fixed to 5s. 
+Still the time is not decreasing, it's fixed (an infinite time to play the game). 
+
+Second version is that I just removed minus from   LEA param_3,[RAX + -0x1]  and I got  LEA param_3,[RAX + 0x1] and now the time is increasing by 1, so again I achieved an infinite time. 
+
+
+* After successful patching inside ghidra I have written python scripts for patching.
+I will explain one of them, how I wrote it.
+
+example: patching32.py
+#!/usr/bin/env python3
+from pwn import *
+
+e = ELF('./toppler32')
+
+
+TARGET_ADDR1 = 0x804c4f1
+TARGET_ADDR2 = 0x8056417
+
+if e.read(TARGET_ADDR1, 3) != b'\x83\xe8\x01' and e.read(TARGET_ADDR2, 7) != b'\x83-\x9c\x91\x06\x08\x01':
+	print("Wrong binary or already patched!")
+else:
+	e.asm(TARGET_ADDR1, "sub eax, 0x0")
+	e.asm(TARGET_ADDR2, "sub    DWORD PTR ds:0x806919c, 0x0")
+	e.save('./final_patch32')
+	print("Successfully done")
+
+1. Target addresses represent the addresses of instructions that I patched.
+
+2. if e.read(TARGET_ADDR1, 3) != b'\x83\xe8\x01'
+
+The line is comparing if the instruction on this address is already patched(changed). Because the original bytes look b'\x83\xe8\x01', so if it is different than this, the instruction has been changed. For the second comparison in IF is the same.
+
+*** Here is specified 3, because I have 3 bytes on that address in ghidra:
+      if e.read(TARGET_ADDR, 3) == b'\x83\xe8\x00':
+      
+In order to know what to put under the command e.asm(), I have to disasembly the target address. For example I will explain the case of the second target address.
+I do this by running(entering python, like it has been shown in the lectures): 
+python3 
+from pwn import *
+e = ELF('./toppler32')
+print(e.disasm(0x8056417,7))
+ 8056417:       83 2d 9c 91 06 08 01    sub    DWORD PTR ds:0x806919c, 0x1
+* I specified to show 7 bytes, because on this address I have 7bytes, I observed this from ghidra.
+
+The sequence b'\x83-\x9c\x91\x06\x08\x01' of bytes I wrote in IF statement, by simply executing the command:
+print(e.read(0x8056417,7))
