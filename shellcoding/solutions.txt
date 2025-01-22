@@ -1,0 +1,44 @@
+exploit_bof101.py
+I used exploit7 script from lectures as an example from where to start.
+Firstly by running the bof101 I saw a leaking address of x. 
+Then I have run the program using gdb. 
+Before running the program again in gdb I made a pattern of 100 by using cyclic(De Brujin sequence) in order to compute the offset that I have to use.
+I pasted De Brujin pattern as an input to program and later I observed eip register => $eip   : 0x6161616c ("laaa"?).
+Basically I rewrote return address and program crashed trying to return 'laaa'(eip register). 
+By observing this I could computed the offset between the buffer and return address.
+Then I exited gdb and I wrote in terminal cyclic -c laaa to obtain an offset that I have to use and it is 44. 
+
+After I was playing with gdb and I disassembled main function disas('main') in gdb to see on which address is foo function, because foo function is one with overflow vulnerabilty.
+I put a break point on one address before the foo function(b *main+128) and I obtained arguments of printf@plt.
+I saw that the address of 0x00c0ffee is given by: [sp + 0x1c] = 0x00c0ffee
+So I asked myself how could I determine the address of stack pointer?
+By doing subtraction: the address of 0x00c0ffee - 0x1c. 
+The address of 0x00c0ffee is a leaking address and it is different every time when I execute a program. 
+So, I wrote a function in my python script that dynamically retrieves the address of x:
+- the function get_x_address()  extracts the address of variable x from the provided parameter process(an istance of a process).
+
+*** leak = process.recvuntil(b'I\'ll call foo()').decode()
+The recvuntil is used to read data from the process until the specified string (b'I\'ll call foo()') is encountered. 
+The received data is then decoded from bytes to a string using decode().
+
+***match = re.search(r'&x=(0x[0-9a-fA-F]+)', leak)
+The function then uses the re.search, to search for a pattern in the decoded data.
+The pattern being searched for is &x=(0x[0-9a-fA-F]+). (0x followed by hexadecimal characters).
+
+By doing all of abovementioned, I successfully spawned a shell, and I have run my script remotely in order to see flag.txt file.
+BASC{Congratz_U_3Xpl0it3d_your_f1r5t_BOF}
+
+
+exploit_smallcodex64.py
+When I  run a program ./smallcodex64 I obtain a text telling me that I have to provide any x64 shellcode up to 25 bytes.
+Knowing that shellcode represents a sequence of bytes(machine code; assembly code) that is used as a payload in the exploitation of vulnerabilities of some program.
+I got an idea that I have to find and provide to program a shellcode(up to 25bytes) in order to obtain flag.txt. 
+Since there is written provide me any x64 shellcode, I searched for x64 shellcode up to 25 bytes on google.
+I found it on the second website shown by google(the same website provided on the slide): https://www.exploit-db.com/exploits/42179
+This shellcode is for x64 and it has 24 bytes. 
+
+I basically copied this shellcode into my script: 
+\x50\x48\x31\xd2\x48\x31\xf6\x48\xbb\x2f\x62\x69\x6e\x2f\x2f\x73\x68\x53\x54\x5f\xb0\x3b\x0f\x05
+
+By doing all of abovementioned I wrote and ran my python script remotely in order to see flag.txt file.
+BASC{0pT1miZin9_5h3llc0d3_iS_n0T_s0_H4rD}
